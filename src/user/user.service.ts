@@ -4,14 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  CreateUserDto,
-  UpdatePasswordDto,
-  User,
-  UserRole,
-} from './user.interface';
+import { User, UserRole } from './user.interface';
 import { validate as uuidValidate } from 'uuid';
 import { randomUUID } from 'crypto';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdatePasswordDto } from './dto/update-password.dto';
 
 @Injectable()
 export class UserService {
@@ -27,11 +24,11 @@ export class UserService {
     };
   }
 
-  findAll() {
+  findAll(): Omit<User, 'password'>[] {
     return this.users.map((user) => this.sanitize(user));
   }
 
-  findOne(id: string) {
+  findOne(id: string): User {
     let result: User | undefined;
 
     if (uuidValidate(id)) {
@@ -47,7 +44,7 @@ export class UserService {
     }
   }
 
-  create(dto: CreateUserDto) {
+  create(dto: CreateUserDto): Omit<User, 'password'> {
     const newUser: User = {
       id: randomUUID(),
       login: dto.login,
@@ -60,7 +57,7 @@ export class UserService {
     return this.sanitize(newUser);
   }
 
-  update(id: string, dto: UpdatePasswordDto) {
+  update(id: string, dto: UpdatePasswordDto): Omit<User, 'password'> {
     let userId: number;
 
     if (uuidValidate(id)) {
@@ -87,7 +84,7 @@ export class UserService {
     }
   }
 
-  remove(id: string) {
+  remove(id: string): void {
     let userId: number;
 
     if (uuidValidate(id)) {
