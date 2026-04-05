@@ -9,9 +9,16 @@ import { validate as uuidValidate } from 'uuid';
 import { randomUUID } from 'crypto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
+import { ArticleService } from 'src/article/article.service';
+import { CommentService } from 'src/comment/comment.service';
 
 @Injectable()
 export class UserService {
+  constructor(
+    private readonly articleService: ArticleService,
+    private readonly commentService: CommentService,
+  ) {}
+
   private users: User[] = [];
 
   private sanitize(user: User) {
@@ -94,7 +101,23 @@ export class UserService {
     }
 
     if (userId !== -1) {
+      const user = this.users[userId];
       this.users.splice(userId, 1);
+
+      const userArticles = this.articleService
+        .findAll()
+        .filter((article) => article.authorId === user.id);
+      userArticles.forEach((article) => {
+        this.articleService.update(article.id, {
+          ...article,
+          authorId: null,
+        });
+      });
+
+      const userComments = this.commentService
+        .findAll()
+        .filter((comment) => comment.authorId === user.id);
+      userComments.forEach((comment) => this.commentService.remove(comment.id));
     } else {
       throw new NotFoundException('User not found');
     }

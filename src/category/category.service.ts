@@ -8,9 +8,12 @@ import { validate as uuidValidate } from 'uuid';
 import { randomUUID } from 'crypto';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { ArticleService } from 'src/article/article.service';
 
 @Injectable()
 export class CategoryService {
+  constructor(private readonly articleService: ArticleService) {}
+
   private categories: Category[] = [];
 
   findAll(): Category[] {
@@ -74,7 +77,18 @@ export class CategoryService {
     }
 
     if (categoryId !== -1) {
+      const category = this.categories[categoryId];
       this.categories.splice(categoryId, 1);
+
+      const categoryArticles = this.articleService
+        .findAll()
+        .filter((article) => article.categoryId === category.id);
+      categoryArticles.forEach((article) => {
+        this.articleService.update(article.id, {
+          ...article,
+          categoryId: null,
+        });
+      });
     } else {
       throw new NotFoundException('Category not found');
     }

@@ -16,6 +16,10 @@ export class CommentService {
 
   private comments: Comment[] = [];
 
+  findAll(): Comment[] {
+    return this.comments;
+  }
+
   findAllByArticleId(articleId: string): Comment[] {
     if (uuidValidate(articleId)) {
       return this.comments.filter((comment) => comment.articleId === articleId);
