@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -12,7 +14,10 @@ import { ArticleService } from 'src/article/article.service';
 
 @Injectable()
 export class CommentService {
-  constructor(private readonly articleService: ArticleService) {}
+  constructor(
+    @Inject(forwardRef(() => ArticleService))
+    private readonly articleService: ArticleService,
+  ) {}
 
   private comments: Comment[] = [];
 
