@@ -33,6 +33,17 @@ export class CommentService {
     }
   }
 
+  findOne(id: string): Comment {
+    if (!uuidValidate(id)) {
+      throw new BadRequestException('Comment id is invalid');
+    }
+    const result = this.comments.find((c) => c.id === id);
+    if (!result) {
+      throw new NotFoundException('Comment not found');
+    }
+    return result;
+  }
+
   create(dto: CreateCommentDto): Comment {
     const articles = this.articleService.findAll();
     const article = articles.find((article) => article.id === dto.articleId);
