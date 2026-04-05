@@ -8,7 +8,6 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
-import { User } from './user.interface';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
@@ -23,7 +22,7 @@ export class UserController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string): User {
+  findOne(@Param('id') id: string) {
     return this.userService.findOne(id);
   }
 

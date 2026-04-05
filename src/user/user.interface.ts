@@ -12,14 +12,3 @@ export enum UserRole {
   EDITOR = 'editor',
   VIEWER = 'viewer',
 }
-
-export interface CreateUserDto {
-  login: string;
-  password: string;
-  role?: UserRole;
-}
-
-export interface UpdatePasswordDto {
-  oldPassword: string;
-  newPassword: string;
-}
