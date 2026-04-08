@@ -11,6 +11,7 @@ import { Article, ArticleStatus } from './article.interface';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { CommentService } from 'src/comment/comment.service';
+import { sortDataByOrder } from 'src/utils/sortDataByOrder';
 
 @Injectable()
 export class ArticleService {
@@ -21,13 +22,33 @@ export class ArticleService {
 
   private articles: Article[] = [];
 
-  findAll(status?: string, categoryId?: string, tag?: string): Article[] {
-    return this.articles.filter(
+  findAll(
+    page?: number,
+    limit?: number,
+    status?: string,
+    categoryId?: string,
+    tag?: string,
+    sortBy?: string,
+    order?: string,
+  ) {
+    let data: Article[] = this.articles.filter(
       (article) =>
         (!status || article.status === status) &&
         (!categoryId || article.categoryId === categoryId) &&
         (!tag || article.tags.includes(tag)),
     );
+
+    if (sortBy) data = sortDataByOrder(data, sortBy, order);
+
+    if (page && limit) {
+      const total = data.length;
+      return {
+        total,
+        page,
+        limit,
+        data: data.slice((page - 1) * limit, page * limit),
+      };
+    } else return data;
   }
 
   findOne(id: string): Article {

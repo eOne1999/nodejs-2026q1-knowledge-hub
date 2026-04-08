@@ -11,6 +11,7 @@ import { Comment } from './comment.interface';
 import { randomUUID } from 'crypto';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { ArticleService } from 'src/article/article.service';
+import { Article } from 'src/article/article.interface';
 
 @Injectable()
 export class CommentService {
@@ -45,7 +46,7 @@ export class CommentService {
   }
 
   create(dto: CreateCommentDto): Comment {
-    const articles = this.articleService.findAll();
+    const articles = this.articleService.findAll() as Article[];
     const article = articles.find((article) => article.id === dto.articleId);
 
     if (article) {
