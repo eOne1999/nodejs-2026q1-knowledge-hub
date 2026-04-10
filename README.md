@@ -29,3 +29,6 @@ npm run test
 - GET /comment?articleId={id}
 - POST /comment
 - DELETE /comment/:id
+
+## Docker Hub
+https://hub.docker.com/r/ebons/knowledge-hub
