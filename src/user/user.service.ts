@@ -11,6 +11,8 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
 import { ArticleService } from 'src/article/article.service';
 import { CommentService } from 'src/comment/comment.service';
+import { Article } from 'src/article/article.interface';
+import { sortDataByOrder } from 'src/utils/sortDataByOrder';
 
 @Injectable()
 export class UserService {
@@ -31,8 +33,22 @@ export class UserService {
     };
   }
 
-  findAll(): Omit<User, 'password'>[] {
-    return this.users.map((user) => this.sanitize(user));
+  findAll(page?: number, limit?: number, sortBy?: string, order?: string) {
+    let data: Omit<User, 'password'>[] = this.users.map((user) =>
+      this.sanitize(user),
+    );
+
+    if (sortBy) data = sortDataByOrder(data, sortBy, order);
+
+    if (page && limit) {
+      const total = data.length;
+      return {
+        total,
+        page,
+        limit,
+        data: data.slice((page - 1) * limit, page * limit),
+      };
+    } else return data;
   }
 
   findOne(id: string): User {
@@ -104,9 +120,10 @@ export class UserService {
       const user = this.users[userId];
       this.users.splice(userId, 1);
 
-      const userArticles = this.articleService
-        .findAll()
-        .filter((article) => article.authorId === user.id);
+      const articles = this.articleService.findAll() as Article[];
+      const userArticles = articles.filter(
+        (article) => article.authorId === user.id,
+      );
       userArticles.forEach((article) => {
         this.articleService.update(article.id, {
           ...article,

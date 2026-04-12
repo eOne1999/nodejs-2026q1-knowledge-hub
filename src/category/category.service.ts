@@ -9,6 +9,8 @@ import { randomUUID } from 'crypto';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { ArticleService } from 'src/article/article.service';
+import { Article } from 'src/article/article.interface';
+import { sortDataByOrder } from 'src/utils/sortDataByOrder';
 
 @Injectable()
 export class CategoryService {
@@ -16,8 +18,20 @@ export class CategoryService {
 
   private categories: Category[] = [];
 
-  findAll(): Category[] {
-    return this.categories;
+  findAll(page?: number, limit?: number, sortBy?: string, order?: string) {
+    let data: Category[] = this.categories;
+
+    if (sortBy) data = sortDataByOrder(data, sortBy, order);
+
+    if (page && limit) {
+      const total = data.length;
+      return {
+        total,
+        page,
+        limit,
+        data: data.slice((page - 1) * limit, page * limit),
+      };
+    } else return data;
   }
 
   findOne(id: string): Category {
@@ -80,9 +94,10 @@ export class CategoryService {
       const category = this.categories[categoryId];
       this.categories.splice(categoryId, 1);
 
-      const categoryArticles = this.articleService
-        .findAll()
-        .filter((article) => article.categoryId === category.id);
+      const articles = this.articleService.findAll() as Article[];
+      const categoryArticles = articles.filter(
+        (article) => article.categoryId === category.id,
+      );
       categoryArticles.forEach((article) => {
         this.articleService.update(article.id, {
           ...article,
