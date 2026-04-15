@@ -3,23 +3,24 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Category } from './category.interface';
 import { validate as uuidValidate } from 'uuid';
-import { randomUUID } from 'crypto';
+import { PrismaService } from 'prisma/prisma.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
-import { ArticleService } from 'src/article/article.service';
-import { Article } from 'src/article/article.interface';
 import { sortDataByOrder } from 'src/utils/sortDataByOrder';
+import { Category } from '@prisma/client';
 
 @Injectable()
 export class CategoryService {
-  constructor(private readonly articleService: ArticleService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  private categories: Category[] = [];
-
-  findAll(page?: number, limit?: number, sortBy?: string, order?: string) {
-    let data: Category[] = this.categories;
+  async findAll(
+    page?: number,
+    limit?: number,
+    sortBy?: string,
+    order?: string,
+  ) {
+    let data: Category[] = await this.prisma.category.findMany();
 
     if (sortBy) data = sortDataByOrder(data, sortBy, order);
 
@@ -31,81 +32,42 @@ export class CategoryService {
         limit,
         data: data.slice((page - 1) * limit, page * limit),
       };
-    } else return data;
+    }
+    return data;
   }
 
-  findOne(id: string): Category {
-    let result: Category | undefined;
-
-    if (uuidValidate(id)) {
-      result = this.categories.find((category) => category.id === id);
-    } else {
+  async findOne(id: string): Promise<Category> {
+    if (!uuidValidate(id)) {
       throw new BadRequestException('Category id is invalid');
     }
-
-    if (result) {
-      return result;
-    } else {
-      throw new NotFoundException('Category not found');
-    }
+    const category: Category = await this.prisma.category.findUnique({
+      where: { id },
+    });
+    if (!category) throw new NotFoundException('Category not found');
+    return category;
   }
 
-  create(dto: CreateCategoryDto): Category {
-    const newCategory: Category = {
-      id: randomUUID(),
-      ...dto,
-    };
-    this.categories.push(newCategory);
-    return newCategory;
+  async create(dto: CreateCategoryDto): Promise<Category> {
+    return this.prisma.category.create({ data: dto });
   }
 
-  update(id: string, dto: UpdateCategoryDto): Category {
-    let categoryId: number;
-
-    if (uuidValidate(id)) {
-      categoryId = this.categories.findIndex((category) => category.id === id);
-    } else {
+  async update(id: string, dto: UpdateCategoryDto): Promise<Category> {
+    if (!uuidValidate(id)) {
       throw new BadRequestException('Category id is invalid');
     }
+    const exists = await this.prisma.category.findUnique({ where: { id } });
+    if (!exists) throw new NotFoundException('Category not found');
 
-    if (categoryId !== -1) {
-      const category = this.categories[categoryId];
-      const updatedCategory: Category = {
-        ...category,
-        ...dto,
-      };
-      this.categories[categoryId] = updatedCategory;
-      return updatedCategory;
-    } else {
-      throw new NotFoundException('Category not found');
-    }
+    return this.prisma.category.update({ where: { id }, data: dto });
   }
 
-  remove(id: string) {
-    let categoryId: number;
-
-    if (uuidValidate(id)) {
-      categoryId = this.categories.findIndex((category) => category.id === id);
-    } else {
+  async remove(id: string): Promise<void> {
+    if (!uuidValidate(id)) {
       throw new BadRequestException('Category id is invalid');
     }
+    const exists = await this.prisma.category.findUnique({ where: { id } });
+    if (!exists) throw new NotFoundException('Category not found');
 
-    if (categoryId !== -1) {
-      const category = this.categories[categoryId];
-      this.categories.splice(categoryId, 1);
-
-      const articles = this.articleService.findAll() as Article[];
-      const categoryArticles = articles.filter(
-        (article) => article.categoryId === category.id,
-      );
-      categoryArticles.forEach((article) => {
-        this.articleService.update(article.id, {
-          ...article,
-          categoryId: null,
-        });
-      });
-    } else {
-      throw new NotFoundException('Category not found');
-    }
+    await this.prisma.category.delete({ where: { id } });
   }
 }

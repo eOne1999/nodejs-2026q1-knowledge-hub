@@ -1,80 +1,63 @@
 import {
   BadRequestException,
-  forwardRef,
-  Inject,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { validate as uuidValidate } from 'uuid';
-import { Comment } from './comment.interface';
-import { randomUUID } from 'crypto';
+import { PrismaService } from 'prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
-import { ArticleService } from 'src/article/article.service';
-import { Article } from 'src/article/article.interface';
+import { Article, Comment } from '@prisma/client';
 
 @Injectable()
 export class CommentService {
-  constructor(
-    @Inject(forwardRef(() => ArticleService))
-    private readonly articleService: ArticleService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  private comments: Comment[] = [];
-
-  findAll(): Comment[] {
-    return this.comments;
+  async findAll(): Promise<Comment[]> {
+    const comments: Comment[] = await this.prisma.comment.findMany();
+    return comments;
   }
 
-  findAllByArticleId(articleId: string): Comment[] {
-    if (uuidValidate(articleId)) {
-      return this.comments.filter((comment) => comment.articleId === articleId);
-    } else {
+  async findAllByArticleId(articleId: string): Promise<Comment[]> {
+    if (!uuidValidate(articleId)) {
       throw new BadRequestException('Article id is invalid');
     }
+    const comments: Comment[] = await this.prisma.comment.findMany({
+      where: { articleId },
+    });
+    return comments;
   }
 
-  findOne(id: string): Comment {
+  async findOne(id: string): Promise<Comment> {
     if (!uuidValidate(id)) {
       throw new BadRequestException('Comment id is invalid');
     }
-    const result = this.comments.find((c) => c.id === id);
-    if (!result) {
-      throw new NotFoundException('Comment not found');
-    }
-    return result;
+    const comment: Comment = await this.prisma.comment.findUnique({
+      where: { id },
+    });
+    if (!comment) throw new NotFoundException('Comment not found');
+    return comment;
   }
 
-  create(dto: CreateCommentDto): Comment {
-    const articles = this.articleService.findAll() as Article[];
-    const article = articles.find((article) => article.id === dto.articleId);
-
-    if (article) {
-      const newComment: Comment = {
-        ...dto,
-        id: randomUUID(),
-        createdAt: Date.now(),
-      };
-      this.comments.push(newComment);
-      return newComment;
-    } else {
+  async create(dto: CreateCommentDto): Promise<Comment> {
+    const article: Article = await this.prisma.article.findUnique({
+      where: { id: dto.articleId },
+    });
+    if (!article) {
       throw new UnprocessableEntityException("Article doesn't exist");
     }
+
+    const comment: Comment = await this.prisma.comment.create({ data: dto });
+    return comment;
   }
 
-  remove(id: string) {
-    let commentId: number;
-
-    if (uuidValidate(id)) {
-      commentId = this.comments.findIndex((Comment) => Comment.id === id);
-    } else {
+  async remove(id: string): Promise<void> {
+    if (!uuidValidate(id)) {
       throw new BadRequestException('Comment id is invalid');
     }
+    const exists = await this.prisma.comment.findUnique({ where: { id } });
+    if (!exists) throw new NotFoundException('Comment not found');
 
-    if (commentId !== -1) {
-      this.comments.splice(commentId, 1);
-    } else {
-      throw new NotFoundException('Comment not found');
-    }
+    await this.prisma.comment.delete({ where: { id } });
   }
 }
