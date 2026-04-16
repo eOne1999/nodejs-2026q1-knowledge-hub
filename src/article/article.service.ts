@@ -1,28 +1,29 @@
 import {
   BadRequestException,
-  forwardRef,
-  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { validate as uuidValidate } from 'uuid';
-import { randomUUID } from 'crypto';
-import { Article, ArticleStatus } from './article.interface';
+import { PrismaService } from 'prisma/prisma.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
-import { CommentService } from 'src/comment/comment.service';
 import { sortDataByOrder } from 'src/utils/sortDataByOrder';
+import { Article, Prisma, Tag } from '@prisma/client';
 
 @Injectable()
 export class ArticleService {
-  constructor(
-    @Inject(forwardRef(() => CommentService))
-    private readonly commentService: CommentService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  private articles: Article[] = [];
+  private mapArticle(article: Article & { tags?: Tag[] }) {
+    return {
+      ...article,
+      tags: article.tags?.map((t: Tag) => t.name) ?? [],
+      createdAt: article.createdAt,
+      updatedAt: article.updatedAt,
+    };
+  }
 
-  findAll(
+  async findAll(
     page?: number,
     limit?: number,
     status?: string,
@@ -31,12 +32,17 @@ export class ArticleService {
     sortBy?: string,
     order?: string,
   ) {
-    let data: Article[] = this.articles.filter(
-      (article) =>
-        (!status || article.status === status) &&
-        (!categoryId || article.categoryId === categoryId) &&
-        (!tag || article.tags.includes(tag)),
-    );
+    const where: Prisma.ArticleWhereInput = {};
+    if (status) where.status = status as any;
+    if (categoryId) where.categoryId = categoryId;
+    if (tag) where.tags = { some: { name: tag } };
+
+    const articles: Article[] = await this.prisma.article.findMany({
+      where,
+      include: { tags: true },
+    });
+
+    let data: Article[] = articles.map(this.mapArticle.bind(this));
 
     if (sortBy) data = sortDataByOrder(data, sortBy, order);
 
@@ -48,84 +54,81 @@ export class ArticleService {
         limit,
         data: data.slice((page - 1) * limit, page * limit),
       };
-    } else return data;
+    }
+    return data;
   }
 
-  findOne(id: string): Article {
-    let result: Article | undefined;
-
-    if (uuidValidate(id)) {
-      result = this.articles.find((article) => article.id === id);
-    } else {
+  async findOne(id: string): Promise<Article> {
+    if (!uuidValidate(id)) {
       throw new BadRequestException('Article id is invalid');
     }
-
-    if (result) {
-      return result;
-    } else {
-      throw new NotFoundException('Article not found');
-    }
+    const article: Article = await this.prisma.article.findUnique({
+      where: { id },
+      include: { tags: true },
+    });
+    if (!article) throw new NotFoundException('Article not found');
+    return this.mapArticle(article);
   }
 
-  create(dto: CreateArticleDto): Article {
-    const newArticle: Article = {
-      ...dto,
-      status: dto.status || ArticleStatus.DRAFT,
-      authorId: dto.authorId || null,
-      categoryId: dto.categoryId || null,
-      tags: dto.tags || [],
-      id: randomUUID(),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    this.articles.push(newArticle);
-    return newArticle;
+  async create(dto: CreateArticleDto): Promise<Article> {
+    const article: Article = await this.prisma.article.create({
+      data: {
+        title: dto.title,
+        content: dto.content,
+        status: (dto.status as any) || 'draft',
+        authorId: dto.authorId ?? null,
+        categoryId: dto.categoryId ?? null,
+        tags: dto.tags?.length
+          ? {
+              connectOrCreate: dto.tags.map((name) => ({
+                where: { name },
+                create: { name },
+              })),
+            }
+          : undefined,
+      },
+      include: { tags: true },
+    });
+    return this.mapArticle(article);
   }
 
-  update(id: string, dto: UpdateArticleDto): Article {
-    let articleId: number;
-
-    if (uuidValidate(id)) {
-      articleId = this.articles.findIndex((article) => article.id === id);
-    } else {
+  async update(id: string, dto: UpdateArticleDto): Promise<Article> {
+    if (!uuidValidate(id)) {
       throw new BadRequestException('Article id is invalid');
     }
+    const exists = await this.prisma.article.findUnique({ where: { id } });
+    if (!exists) throw new NotFoundException('Article not found');
 
-    if (articleId !== -1) {
-      const article = this.articles[articleId];
-      const updatedArticle: Article = {
-        ...article,
-        ...dto,
-        updatedAt: Date.now(),
-      };
-      this.articles[articleId] = updatedArticle;
-      return updatedArticle;
-    } else {
-      throw new NotFoundException('Article not found');
-    }
+    const article: Article = await this.prisma.article.update({
+      where: { id },
+      data: {
+        ...(dto.title !== undefined && { title: dto.title }),
+        ...(dto.content !== undefined && { content: dto.content }),
+        ...(dto.status !== undefined && { status: dto.status as any }),
+        ...(dto.authorId !== undefined && { authorId: dto.authorId }),
+        ...(dto.categoryId !== undefined && { categoryId: dto.categoryId }),
+        ...(dto.tags !== undefined && {
+          tags: {
+            set: [],
+            connectOrCreate: dto.tags.map((name) => ({
+              where: { name },
+              create: { name },
+            })),
+          },
+        }),
+      },
+      include: { tags: true },
+    });
+    return this.mapArticle(article);
   }
 
-  remove(id: string) {
-    let articleId: number;
-
-    if (uuidValidate(id)) {
-      articleId = this.articles.findIndex((article) => article.id === id);
-    } else {
+  async remove(id: string): Promise<void> {
+    if (!uuidValidate(id)) {
       throw new BadRequestException('Article id is invalid');
     }
+    const exists = await this.prisma.article.findUnique({ where: { id } });
+    if (!exists) throw new NotFoundException('Article not found');
 
-    if (articleId !== -1) {
-      const article = this.articles[articleId];
-      this.articles.splice(articleId, 1);
-
-      const articleComments = this.commentService
-        .findAll()
-        .filter((comment) => comment.articleId === article.id);
-      articleComments.forEach((comment) =>
-        this.commentService.remove(comment.id),
-      );
-    } else {
-      throw new NotFoundException('Article not found');
-    }
+    await this.prisma.article.delete({ where: { id } });
   }
 }
