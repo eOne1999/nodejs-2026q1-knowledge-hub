@@ -59,13 +59,42 @@ export class AuthService {
       throw new ForbiddenException('Invalid credentials');
     }
 
-    return this.issueTokens(user.id, user.login, user.role);
+    const { accessToken, refreshToken } = this.issueTokens(
+      user.id,
+      user.login,
+      user.role,
+    );
+
+    const expiresIn = process.env.TOKEN_REFRESH_EXPIRE_TIME;
+    const expiresAt = this.parseExpiresInToDate(expiresIn);
+
+    await this.prisma.refreshToken.create({
+      data: {
+        token: refreshToken,
+        userId: user.id,
+        expiresAt,
+      },
+    });
+
+    return { accessToken, refreshToken };
   }
 
   async refresh(refreshToken: string) {
     try {
       const payload = this.jwtService.verify(refreshToken, {
         secret: process.env.JWT_SECRET_REFRESH_KEY,
+      });
+
+      const tokenRecord = await this.prisma.refreshToken.findUnique({
+        where: { token: refreshToken },
+      });
+
+      if (!tokenRecord) {
+        throw new ForbiddenException('Refresh token is invalid');
+      }
+
+      await this.prisma.refreshToken.delete({
+        where: { id: tokenRecord.id },
       });
 
       const user = await this.prisma.user.findUnique({
@@ -76,10 +105,43 @@ export class AuthService {
         throw new ForbiddenException('User not found');
       }
 
-      return this.issueTokens(user.id, user.login, user.role);
+      const { accessToken, refreshToken: newRefreshToken } = this.issueTokens(
+        user.id,
+        user.login,
+        user.role,
+      );
+
+      const expiresIn = process.env.TOKEN_REFRESH_EXPIRE_TIME;
+      const expiresAt = this.parseExpiresInToDate(expiresIn);
+      await this.prisma.refreshToken.create({
+        data: {
+          token: newRefreshToken,
+          userId: user.id,
+          expiresAt,
+        },
+      });
+
+      return { accessToken, refreshToken: newRefreshToken };
     } catch (err) {
-      if (err instanceof ForbiddenException) throw err;
       throw new ForbiddenException('Refresh token is invalid or expired');
+    }
+  }
+
+  async logout(refreshToken: string) {
+    try {
+      const tokenRecord = await this.prisma.refreshToken.findUnique({
+        where: { token: refreshToken },
+      });
+
+      if (tokenRecord) {
+        await this.prisma.refreshToken.delete({
+          where: { id: tokenRecord.id },
+        });
+      }
+
+      return { message: 'Logout successful' };
+    } catch (error) {
+      return { message: 'Logout successful' };
     }
   }
 
@@ -97,5 +159,33 @@ export class AuthService {
     });
 
     return { accessToken, refreshToken };
+  }
+
+  private parseExpiresInToDate(expiresIn: string): Date {
+    const match = expiresIn.match(/^(\d+)([smhd])$/);
+    if (!match) {
+      return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    }
+    const value = parseInt(match[1], 10);
+    const unit = match[2];
+    const now = Date.now();
+    let ms = 0;
+    switch (unit) {
+      case 's':
+        ms = value * 1000;
+        break;
+      case 'm':
+        ms = value * 60 * 1000;
+        break;
+      case 'h':
+        ms = value * 60 * 60 * 1000;
+        break;
+      case 'd':
+        ms = value * 24 * 60 * 60 * 1000;
+        break;
+      default:
+        ms = 7 * 24 * 60 * 60 * 1000;
+    }
+    return new Date(now + ms);
   }
 }
