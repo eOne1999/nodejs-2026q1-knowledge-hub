@@ -8,16 +8,20 @@ import {
   Post,
   Put,
   Query,
+  Req,
 } from '@nestjs/common';
 import { ArticleService } from './article.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { ApiQuery } from '@nestjs/swagger';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
 @Controller('article')
 export class ArticleController {
   constructor(private readonly articleService: ArticleService) {}
 
+  @Get()
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'status', required: false })
@@ -25,7 +29,6 @@ export class ArticleController {
   @ApiQuery({ name: 'tag', required: false })
   @ApiQuery({ name: 'sortBy', required: false })
   @ApiQuery({ name: 'order', required: false, enum: ['asc', 'desc'] })
-  @Get()
   findAll(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -52,16 +55,23 @@ export class ArticleController {
   }
 
   @Post()
+  @Roles(Role.editor, Role.admin)
   create(@Body() dto: CreateArticleDto) {
     return this.articleService.create(dto);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateArticleDto) {
-    return this.articleService.update(id, dto);
+  @Roles(Role.editor, Role.admin)
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateArticleDto,
+    @Req() req: Request & { user: { userId: string; role: Role } },
+  ) {
+    return this.articleService.update(id, dto, req.user);
   }
 
   @Delete(':id')
+  @Roles(Role.admin)
   @HttpCode(204)
   remove(@Param('id') id: string) {
     this.articleService.remove(id);

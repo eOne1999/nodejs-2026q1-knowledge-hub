@@ -13,16 +13,18 @@ import { CategoryService } from './category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { ApiQuery } from '@nestjs/swagger';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
 @Controller('category')
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
+  @Get()
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'sortBy', required: false })
   @ApiQuery({ name: 'order', required: false, enum: ['asc', 'desc'] })
-  @Get()
   findAll(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -38,16 +40,19 @@ export class CategoryController {
   }
 
   @Post()
+  @Roles(Role.admin)
   create(@Body() dto: CreateCategoryDto) {
     return this.categoryService.create(dto);
   }
 
   @Put(':id')
+  @Roles(Role.admin)
   update(@Param('id') id: string, @Body() dto: UpdateCategoryDto) {
     return this.categoryService.update(id, dto);
   }
 
   @Delete(':id')
+  @Roles(Role.admin)
   @HttpCode(204)
   remove(@Param('id') id: string) {
     this.categoryService.remove(id);

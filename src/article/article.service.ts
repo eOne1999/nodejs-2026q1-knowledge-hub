@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,7 +9,7 @@ import { PrismaService } from 'prisma/prisma.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { sortDataByOrder } from 'src/utils/sortDataByOrder';
-import { Article, Prisma, Tag } from '@prisma/client';
+import { Article, Prisma, Role, Tag } from '@prisma/client';
 
 @Injectable()
 export class ArticleService {
@@ -92,14 +93,25 @@ export class ArticleService {
     return this.mapArticle(article);
   }
 
-  async update(id: string, dto: UpdateArticleDto): Promise<Article> {
+  async update(
+    id: string,
+    dto: UpdateArticleDto,
+    currentUser: { userId: string; role: Role },
+  ): Promise<Article> {
     if (!uuidValidate(id)) {
       throw new BadRequestException('Article id is invalid');
     }
-    const exists = await this.prisma.article.findUnique({ where: { id } });
-    if (!exists) throw new NotFoundException('Article not found');
+    const article = await this.prisma.article.findUnique({ where: { id } });
+    if (!article) throw new NotFoundException('Article not found');
 
-    const article: Article = await this.prisma.article.update({
+    if (
+      currentUser.role === 'editor' &&
+      article.authorId !== currentUser.userId
+    ) {
+      throw new ForbiddenException('You can only update your own articles');
+    }
+
+    const updatedArticle: Article = await this.prisma.article.update({
       where: { id },
       data: {
         ...(dto.title !== undefined && { title: dto.title }),
@@ -119,7 +131,7 @@ export class ArticleService {
       },
       include: { tags: true },
     });
-    return this.mapArticle(article);
+    return this.mapArticle(updatedArticle);
   }
 
   async remove(id: string): Promise<void> {

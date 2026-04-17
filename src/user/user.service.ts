@@ -9,7 +9,7 @@ import { PrismaService } from 'prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
 import { sortDataByOrder } from 'src/utils/sortDataByOrder';
-import { User } from '@prisma/client';
+import { Role, User } from '@prisma/client';
 
 @Injectable()
 export class UserService {
@@ -71,10 +71,16 @@ export class UserService {
   async update(
     id: string,
     dto: UpdatePasswordDto,
+    currentUser: { userId: string; role: Role },
   ): Promise<Omit<User, 'password'>> {
     if (!uuidValidate(id)) {
       throw new BadRequestException('User id is invalid');
     }
+
+    if (currentUser.userId !== id) {
+      throw new ForbiddenException('You can only change your own password');
+    }
+
     const user: User = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
 
