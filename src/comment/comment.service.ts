@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -7,7 +8,7 @@ import {
 import { validate as uuidValidate } from 'uuid';
 import { PrismaService } from 'prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
-import { Article, Comment } from '@prisma/client';
+import { Article, Comment, Role } from '@prisma/client';
 
 @Injectable()
 export class CommentService {
@@ -51,12 +52,22 @@ export class CommentService {
     return comment;
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(
+    id: string,
+    currentUser: { userId: string; role: Role },
+  ): Promise<void> {
     if (!uuidValidate(id)) {
       throw new BadRequestException('Comment id is invalid');
     }
-    const exists = await this.prisma.comment.findUnique({ where: { id } });
-    if (!exists) throw new NotFoundException('Comment not found');
+    const comment = await this.prisma.comment.findUnique({ where: { id } });
+    if (!comment) throw new NotFoundException('Comment not found');
+
+    if (
+      currentUser.role === 'editor' &&
+      comment.authorId !== currentUser.userId
+    ) {
+      throw new ForbiddenException('You can only delete your own comments');
+    }
 
     await this.prisma.comment.delete({ where: { id } });
   }

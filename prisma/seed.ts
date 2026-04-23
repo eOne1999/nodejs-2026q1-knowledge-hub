@@ -2,20 +2,30 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import * as dotenv from 'dotenv';
+import * as bcrypt from 'bcrypt';
 
 dotenv.config();
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
-
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
+  await prisma.article.deleteMany();
+  await prisma.category.deleteMany();
+  await prisma.comment.deleteMany();
+  await prisma.tag.deleteMany();
+  await prisma.user.deleteMany();
+
+  const saltRounds = Number(process.env.CRYPT_SALT ?? 10);
+  const adminPasswordHash = await bcrypt.hash('admin123', saltRounds);
+  const editorPasswordHash = await bcrypt.hash('editor123', saltRounds);
+
   const admin = await prisma.user.create({
-    data: { login: 'admin', password: 'admin123', role: 'admin' },
+    data: { login: 'admin', password: adminPasswordHash, role: 'admin' },
   });
   const editor = await prisma.user.create({
-    data: { login: 'editor', password: 'editor123', role: 'editor' },
+    data: { login: 'editor', password: editorPasswordHash, role: 'editor' },
   });
 
   const tech = await prisma.category.create({

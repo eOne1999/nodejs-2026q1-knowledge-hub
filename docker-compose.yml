@@ -23,6 +23,8 @@ services:
       - "4000:4000"
     env_file:
       - .env
+    environment:
+    - DATABASE_URL=postgresql://User:Password@db:5432/Db?schema=public&connection_limit=10&pool_timeout=20
     restart: on-failure
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4000/"]
